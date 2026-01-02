@@ -1,207 +1,153 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[codz]
-*$py.class
+import asyncio
+import os
+import threading
+import json
+import datetime
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.error import RetryAfter, Forbidden, BadRequest
 
-# C extensions
-*.so
+# --- CONFIGURATION (60 TOKENS) ---
+AUTHORIZED_USERS = [5757666574, 7649072038, 7831276550]
+TOKENS = [
+    "8064830736:AAHJEMFi3kZvvD1OkN1GcrIxBWvHMFb_X6U", "8448164292:AAEPBQSyS6W7-AzEwH6ncHpPsdyxRk4OHyA", 
+    "7360552885:AAEMTBqnKOiY3Hsh_MuDvaf-B6UatiKKI2Y", "7774754508:AAGvEcUN_bKUqd_KLWeZMVUvpBG1TA9rfCk", 
+    "8548528664:AAGd_N3iDqscWB-nly_aduFVMkKkzibNE0Q", "8275333650:AAFns44edkEoHvVrSbeYOF-KoBoGjQSJYC8", 
+    "8296846615:AAH0CA8UfFtl3PK_gwndqGR40vqZq14Rm-k", "8470571553:AAH981zIDyHN38Bfvlr1QaLwOzTsC1cxDmc", 
+    "7976973939:AAHq-dK1SdTM5t-n3T1VbpdTEvK91QeEXAg", "8552418372:AAGNMJj3iQukx_UD9yiUDiWWzX1hdVWALBs", 
+    "8523197235:AAHwRsNQIDlta63893OafaLiwILmwxOK1Q8", "8579313589:AAHVvEdWxVlUB_yP5hyVnUCJoUuJ-4V9euw",
+    "8424294866:AAGzm6I3zYAK0rMSYoOBYSxrtRNg59P160o", "8587777123:AAFgpmn4A58xxvp3kqI-8tBXtvrDImKW2vA", 
+    "8071727321:AAFcHBplTbdmq96OyzFChy8x5u3_DT7HTjg", "8575263445:AAFkOeEUMzkYkyNXskjfAmoB3wn0b_ScigM", 
+    "8557631718:AAE5EDLbadG0i30lvyMX1wwNzAqCzsvtt2w", "8568591271:AAEuIQ-Wxw2JOIuGEm--TbG6KE6fCUKfTVk", 
+    "8508432550:AAG0Y0NSFi79maxCLf3M2d3Tz2v0ttqP5Rg", "8434262112:AAE7vJMxGidikShmmnlPaSOhM8OHJuDyYxw", 
+    "8458595696:AAEuUlaQTUHpMTMg_2xrz1VxNmXgem82k3A", "8147049146:AAH098a7S4pXJptBTHWEKXp4emDwGtLW71E", 
+    "8508135678:AAGUBxV32hbnX8tZkMzhjRJFU7tvg-s3Lr8", "8594481683:AAGtQa1uDJtTawjM2CBwE_iyIEs66D4h2zk",
+    "8472500002:AAEBGZV3aatEjSm7kt1p4aYKzf8si1Fh3L8", "8507446273:AAG1eJ2W9z5rfYGLuO7hGX7Aoa5_TuZqmLA", 
+    "8578166854:AAHNH_26wEdJOspG60_6qJZy-fu1_cYVdOQ", "8565693734:AAG1h0pJ4rLHKD-YCJRXFQ9KSMCsS3CK2n0", 
+    "8554701466:AAESYVKNFGZes7y1X_pSAV1y99xgt11n9Sw", "8455671937:AAEOn95cnl0K6au0bajbAA1ZtG_vrl756-M",
+    "8396101239:AAH4JjiWNa8kI2Ffj_yXhz552JfGFTThkWE", "8599829375:AAF8MOlgbRirgZWeaTSsS89CDBhQqbPyqg8", 
+    "8557484638:AAE4ZY4EaMkWvVd42R3a2YDUq0IZaY1sLT0", "8094572055:AAE3H5SyzSw5eWXaRhzknQQsOcR8PCHFGuM", 
+    "8439803769:AAGoVKWrrm4Ppzj7oSzTt88p3wjyftdTrkM", "8465669720:AAFpw5VOgrAByfJklUQXO17runsrGwLwTJE",
+    "8091703200:AAEnaJexu3fsHsuvILkD0BwOT5P8clfxylA", "8317707046:AAEnEL65oov800qweAEbj_nlagZ1r1_k_UA", 
+    "8268590474:AAFHBGKbBVhvOdnGHlEhz3HaQz64nJ4E1LA", "8246560041:AAHBdIJMMemHmT1SDE8RXMpIF-LjCNYN3u4", 
+    "8271058602:AAFk0MNSzllxB7HAHIhlxt9YI14MfFfIlrc", "8432487902:AAESRDUJqqcx1TALo6dNbVtU86CDwkANvic", 
+    "8438623973:AAFlkZ9ohAGe38Kqh-yHxoYpcaGF3ugw1sA", "8506586092:AAEsAE-TWEPgh0sdVnChoxXbdxzlaMU5mW4", 
+    "8529244690:AAGSRkZTaNyuep1nB6Gfpk9zqtckR5SkcK0", "8513607028:AAHofJ12V6-B8WQaE9e762WobJrc-WFJo8o", 
+    "7973171805:AAEqH6zLAwVCGbJL_wnoOXtUv_k8jVf-LjA", "8571879162:AAEWp5RKjGEF2mp_HkBErSbJ0p1rGKpT9cI",
+    "8482133034:AAHV3tgGv1rBW1TixSOTED0vrM4A4nUflRk", "8374715352:AAEzPdmCoFb_Ly4VLdnYizTb5yPQzdGJNl4", 
+    "8305382541:AAHRyW7BErlJh1E2txXrOMj0s1HNCGuTFDw", "8580716570:AAGF1NOxhQLW3D1QXuuXNj3JUH-61iiF1J4", 
+    "8396335151:AAHaH3ITQYky3f5hX66Jom95loyqy6LAVQI", "8385016551:AAE9KDrYpHXqYvPMuCyeNoH5vI1T0tzV7eU", 
+    "8231907946:AAHoIkhrZBOfgNB1Ti9yVgtw9cq3KKYOTPQ", "8506604072:AAEdFbd3X2bZIVPitMdZuE_ZUMabj7NKFi0", 
+    "8550390691:AAHdc30WFZGtplz8k5b0EkivO2auYEirr5I", "8469478379:AAHigGP1oqYLXJdXFQKXnUWnjNroWCyVpFM", 
+    "8581576572:AAHnsyAE57uIV1ZY_Q1zKwpXSU6LLHCpMek"
+]
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+MEMORY_FILE = "army_memory.json"
+MASTER_EMOJIS = [chr(i) for i in range(0x1F600, 0x1F64F)] + [chr(i) for i in range(0x1F300, 0x1F5FF)]
+ACTIVE_GROUPS = {}
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+def load_memory():
+    global ACTIVE_GROUPS
+    if os.path.exists(MEMORY_FILE):
+        with open(MEMORY_FILE, "r") as f:
+            try: ACTIVE_GROUPS = {int(k): v for k, v in json.load(f).items()}
+            except: ACTIVE_GROUPS = {}
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+def save_memory():
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(ACTIVE_GROUPS, f)
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-.hypothesis/
-.pytest_cache/
-cover/
+def log_flood_console(bot_idx, chat_id, name, emoji):
+    t = datetime.datetime.now().strftime("%H:%M:%S")
+    print(f"\n[{t}] [BOT #{bot_idx}] [GC: {chat_id}]\n" + "="*45 + 
+          f"\n★ NOST-SHAR-EREN SYSTEM ATTACK ★\nTARGET: {name} {emoji}\nREPORT: TERI MAA KO CHOD KE CHABA JAYE\n" + "="*45)
 
-# Translations
-*.mo
-*.pot
+# --- WORKER ---
+async def individual_bot_worker(bot, bot_index):
+    try: await bot.initialize()
+    except: pass
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+    start_idx = (bot_index * 10) % len(MASTER_EMOJIS)
+    my_emojis = MASTER_EMOJIS[start_idx : start_idx + 10]
+    e_idx = 0
 
-# Flask stuff:
-instance/
-.webassets-cache
+    while True:
+        load_memory()
+        if not ACTIVE_GROUPS:
+            await asyncio.sleep(5)
+            continue
 
-# Scrapy stuff:
-.scrapy
+        for chat_id, data in list(ACTIVE_GROUPS.items()):
+            try:
+                await bot.get_chat(chat_id)
+                
+                # NC Cycle
+                for _ in range(10):
+                    emoji = my_emojis[e_idx % 10]
+                    title = f"{data['name']} Nc Kr {emoji}"
+                    await bot.set_chat_title(chat_id=chat_id, title=title)
+                    e_idx += 1
+                    # Custom Delay Use Karo
+                    await asyncio.sleep(data.get("delay", 1))
 
-# Sphinx documentation
-docs/_build/
+                # Telegram Old Text
+                old_text = f"[ ★ > {data['name']} < 𝗧𝗘𝗥𝗜 𝗠𝗔𝗔 𝗞𝗢 𝗖𝗛𝗢𝗗 𝗞𝗘 𝗖𝗛𝗔𝗕𝗔 𝗝𝗔𝗬𝗘 𝗡𝗢𝗦𝗧-𝗦𝗛𝗔𝗥-𝗘𝗥𝗘𝗡 {my_emojis[0]} ★ ]"
+                await bot.send_message(chat_id=chat_id, text=old_text)
+                
+                # Console Flood
+                log_flood_console(bot_index, chat_id, data['name'], my_emojis[0])
+                
+                await asyncio.sleep(3)
 
-# PyBuilder
-.pybuilder/
-target/
+            except (Forbidden, BadRequest): continue
+            except RetryAfter as e: await asyncio.sleep(e.retry_after)
+            except Exception: await asyncio.sleep(5)
+        
+        await asyncio.sleep(1)
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# --- COMMANDS ---
+async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id in AUTHORIZED_USERS:
+        name = " ".join(context.args) if context.args else "TARGET"
+        ACTIVE_GROUPS[update.effective_chat.id] = {"name": name, "delay": 1}
+        save_memory()
+        await update.message.reply_text(f"⚔️ NC/TXT STARTED\nTarget: {name}\nDelay: 1s")
 
-# IPython
-profile_default/
-ipython_config.py
+async def stop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id in AUTHORIZED_USERS:
+        cid = update.effective_chat.id
+        if cid in ACTIVE_GROUPS:
+            del ACTIVE_GROUPS[cid]
+            save_memory()
+            await update.message.reply_text("🛑  NC/TXT GC")
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
+async def ncdelay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id in AUTHORIZED_USERS:
+        cid = update.effective_chat.id
+        if cid in ACTIVE_GROUPS:
+            try:
+                new_delay = float(context.args[0])
+                ACTIVE_GROUPS[cid]["delay"] = new_delay
+                save_memory()
+                await update.message.reply_text(f"⚡ NC Delay updated to: {new_delay}s")
+            except:
+                await update.message.reply_text("❌ Use format: /ncdelay 0.5")
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
+def run_bot(token, index):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        app = ApplicationBuilder().token(token).build()
+        app.add_handler(CommandHandler("start", start_cmd))
+        app.add_handler(CommandHandler("stop", stop_cmd))
+        app.add_handler(CommandHandler("ncdelay", ncdelay_cmd))
+        loop.create_task(individual_bot_worker(app.bot, index))
+        app.run_polling(drop_pending_updates=True, stop_signals=None)
+    except Exception: pass
 
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-#poetry.toml
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
-#   https://pdm-project.org/en/latest/usage/project/#working-with-version-control
-#pdm.lock
-#pdm.toml
-.pdm-python
-.pdm-build/
-
-# pixi
-#   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
-#pixi.lock
-#   Pixi creates a virtual environment in the .pixi directory, just like venv module creates one
-#   in the .venv directory. It is recommended not to include this directory in version control.
-.pixi
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
-
-# Abstra
-# Abstra is an AI-powered process automation framework.
-# Ignore directories containing user credentials, local state, and settings.
-# Learn more at https://abstra.io/docs
-.abstra/
-
-# Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
-#  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
-#  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
-
-# Ruff stuff:
-.ruff_cache/
-
-# PyPI configuration file
-.pypirc
-
-# Cursor
-#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
-#  refer to https://docs.cursor.com/context/ignore-files
-.cursorignore
-.cursorindexingignore
-
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
+if __name__ == "__main__":
+    load_memory()
+    print(">>> 60 BOTS SYSTEM WITH STOP & DELAY READY <<<")
+    for i, t in enumerate(TOKENS):
+        threading.Thread(target=run_bot, args=(t, i), daemon=True).start()
+    threading.Event().wait()
